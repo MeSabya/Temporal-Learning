@@ -89,3 +89,18 @@ client.SignalWorkflow(
 signalCh := workflow.GetSignalChannel(ctx, "payment-webhook")
 ```
 **Meaning “Give me a handle to read signal events from history”**
+
+
+#### HOW THEY CONNECT
+
+```
+client.SignalWorkflow()
+        ↓
+SignalReceived event (history)
+        ↓
+workflow.GetSignalChannel()
+        ↓
+selector.Receive()
+```
+
+👉 They meet via workflow history — not memory.
