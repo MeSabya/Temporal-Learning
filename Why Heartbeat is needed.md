@@ -132,3 +132,89 @@ Because you set:
 
 So not only batch activities even a single long activity benefits with heart-beats.
 
+
+👉 internal/activity.go
+```go
+package internal
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/temporal"
+)
+
+func LongRunningActivity(ctx context.Context, start, total int) error {
+	logger := activity.GetLogger(ctx)
+
+	i := start
+
+	// Resume from heartbeat
+	if activity.HasHeartbeatDetails(ctx) {
+		var lastCompleted int
+		if err := activity.GetHeartbeatDetails(ctx, &lastCompleted); err == nil {
+			i = lastCompleted + 1
+			logger.Info("Resuming from heartbeat", "lastCompleted", lastCompleted)
+		}
+	}
+
+	processedThisAttempt := 0
+
+	for ; i < total; i++ {
+		fmt.Println("Processing item:", i)
+
+		time.Sleep(1 * time.Second)
+
+		// Save progress
+		activity.RecordHeartbeat(ctx, i)
+
+		processedThisAttempt++
+
+		// Fail after 3 items (simulate crash)
+		if processedThisAttempt == 3 && i < total-1 {
+			fmt.Println("Simulated failure...")
+			return temporal.NewApplicationError("temporary failure", "Retryable")
+		}
+	}
+
+	fmt.Println("Activity completed successfully")
+	return nil
+}
+```
+
+👉 internal/workflow.go 
+
+```go
+package internal
+
+import (
+	"time"
+
+	"go.temporal.io/sdk/temporal"
+	"go.temporal.io/sdk/workflow"
+)
+
+func HeartbeatWorkflow(ctx workflow.Context) error {
+	ao := workflow.ActivityOptions{
+		StartToCloseTimeout: 2 * time.Minute,
+		HeartbeatTimeout:    5 * time.Second,
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    time.Second,
+			BackoffCoefficient: 2.0,
+			MaximumAttempts:    4,
+		},
+	}
+
+	ctx = workflow.WithActivityOptions(ctx, ao)
+
+	return workflow.ExecuteActivity(
+		ctx,
+		LongRunningActivity,
+		0,   // start index
+		10,  // total items
+	).Get(ctx, nil)
+}
+
+```
