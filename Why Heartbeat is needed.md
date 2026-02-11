@@ -85,3 +85,50 @@ t=8s   Server replies: "You're canceled"
 t=8s   ctx.Done() is closed
 t=8s   Activity exits
 ```
+
+## Suppose we have to batch process 10 activities or a long running activity ...Then we need to use heartbeat 
+
+### When Do You Need Heartbeats?
+
+You need heartbeat when:
+
+- ✅ Activity runs long
+- ✅ Activity processes batch items
+- ✅ Activity calls external systems
+- ✅ Partial progress matters
+- ✅ Idempotency is expensive
+
+### When Heartbeat IS Useful (Even for "Single" Activity)
+
+Even if it's just one activity, heartbeat helps when:
+
+#### Long-running task
+
+Example:
+
+```
+GenerateLargeReport()  // takes 20 minutes
+```
+
+- If worker crashes at minute 18:
+- Without heartbeat → restart from 0
+- With heartbeat → resume from last checkpoint
+
+#### Crash detection (VERY important)
+
+Heartbeat isn't only for resuming.
+It also detects:
+- Worker crash
+- Deadlock
+- Infinite loop
+- Network freeze
+
+Because you set:
+
+- HeartbeatTimeout: 10 * time.Second
+- If heartbeat not received → Temporal retries immediately.
+- Without heartbeat:
+- Temporal waits full StartToCloseTimeout.
+
+So not only batch activities even a single long activity benefits with heart-beats.
+
